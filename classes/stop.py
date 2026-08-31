@@ -1,5 +1,8 @@
-# Each stop has a record + audio file
-# Immutable stop class
+from dataclasses import dataclass
+from pathlib import Path
+
+from main import DIRECTION_OUTBOUND, LANGUAGE_ENGLISH, ROUTE_ID
+
 @dataclass(frozen=True)
 class Stop:
     """
@@ -21,7 +24,7 @@ class Stop:
         Supported formats: mp3 and mp4.
         """
 
-        folder_path = Path(r"./AudioAuracast") / self.folder
+        folder_path = Path(r"./audio") / self.folder
 
         # Loop through the audio folder to obtain audio file
         for extension in (".mp3", ".mp4"):

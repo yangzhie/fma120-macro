@@ -1,3 +1,8 @@
+import struct
+
+from classes.stop import Stop
+from main import MAGIC, PROTOCOL_VERSION, ROUTE_ID
+
 def build_payload(stop: Stop) -> bytes:
     """
     Builds the custom 9 bytes.
@@ -60,7 +65,7 @@ def decode_bf_hex(bf_hex: str) -> dict:
 
     # Check: 0xFF means manufacturer-specific data
     if raw_bytes[1] != 0xFF:
-        raise ValueError( "Not manufacturer-specific data")
+        raise ValueError("Not manufacturer-specific data")
 
     # Extract the company ID
     company_id = int.from_bytes(raw_bytes[2:4], "little")

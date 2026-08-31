@@ -1,25 +1,21 @@
+import time
+import pygame
+
+from classes.stop import Stop
+
 def list_audio_devices():
     """
     Audio output device discovery helper.
     Identifies the FMA120 transmitter.
     """
 
-    import pygame
-
-    from pygame._sdl2 import (
-        audio as sdl2_audio
-    )
+    from pygame._sdl2 import (audio as sdl2_audio)
 
     # Initialise pygame so audio devices can be queried
     pygame.init()
 
     # False = output devices
-    devices = (
-        sdl2_audio
-        .get_audio_device_names(
-            False
-        )
-    )
+    devices = (sdl2_audio.get_audio_device_names(False))
 
     # Loop all output devices
     for index, name in enumerate(devices):
@@ -35,8 +31,6 @@ def play_audio(stop: Stop, audio_device: str | None, once: bool = False):
     If once=False, announcement loops.
     If once=True, plays one time only.
     """
-
-    import pygame
 
     # Obtain audio file for the stop
     audio_file = stop.audio_path

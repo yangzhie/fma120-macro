@@ -17,9 +17,7 @@ def parse_company_id(value: str) -> int:
 
     # Boundary checking
     if not 0 <= company_id <= 0xFFFF:
-        raise ValueError(
-            "Company ID must fit in 16 bits"
-        )
+        raise ValueError("Company ID must fit in 16 bits")
 
     return company_id
 

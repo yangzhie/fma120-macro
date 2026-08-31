@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-
 import argparse
-import struct
-import time
-from dataclasses import dataclass
-from pathlib import Path
 
-import serial
+from utils.audio import *
+from classes.dongle import *
+from utils.formatting import *
+from classes.stop import *
+from utils.utils import *
 
 # Route number - distinguishes unique routes to avoid overlap
 # Application checks the route id, then stop index
