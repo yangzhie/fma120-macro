@@ -10,68 +10,58 @@ from pathlib import Path
 import serial
 from serial.tools import list_ports
 
-
-# ============================================================
-# PROJECT CONFIGURATION
-# ============================================================
-
+# Route number - distinguishes unique routes to avoid overlap
+# Application checks the route id, then stop index
 ROUTE_ID = 86
 
-# Shared Broadcast Code used by all four stops in the current PoC.
+# Encryption key for all stops
+# Device will not be able to decrypt the audio without this
 SHARED_BROADCAST_CODE = "AURA86DEMO2026"
 
-AUDIO_ROOT = Path(
-    r"./AudioAuracast"
-)
-
+# Front of every payload (2 bytes)
+# Makes the payload unique - parser checks this first
 MAGIC = b"AU"
+
+# Versioning of current protocol
 PROTOCOL_VERSION = 1
 
-DIRECTION_OUTBOUND = 0
-LANGUAGE_ENGLISH = 1
+# TODO: Unused features
+# DIRECTION_OUTBOUND = 0
+# LANGUAGE_ENGLISH = 1
 
-
-# ============================================================
-# STOP MODEL
-# ============================================================
-
+# Each stop has a record + audio file
+# Immutable stop class
 @dataclass(frozen=True)
 class Stop:
+    """
+    Each stop's model and the transmitter config it maps to.
+    Immutable - identity of stop must not be changed.
+    """
+
     index: int
     name: str
     folder: str
     audio_stem: str
-    direction: int = DIRECTION_OUTBOUND
-    language: int = LANGUAGE_ENGLISH
+    # direction: int = DIRECTION_OUTBOUND
+    # language: int = LANGUAGE_ENGLISH
 
     @property
     def audio_path(self) -> Path:
         """
-        Automatically find the audio file for this stop.
-
-        Supported formats:
-        .mp3
-        .mp4
-        .m4a
-        .wav
+        Path to the stop's announcement audio file.
+        Supported formats: mp3 and mp4.
         """
 
-        folder_path = AUDIO_ROOT / self.folder
+        folder_path = Path(r"./AudioAuracast") / self.folder
 
-        # Check each supported file extension.
-        for extension in (
-            ".mp3",
-            ".mp4",
-            ".m4a",
-            ".wav"
-        ):
-            candidate = (
-                folder_path
-                / f"{self.audio_stem}{extension}"
-            )
+        # Loop through the audio folder to obtain audio file
+        for extension in (".mp3", ".mp4"):
+            # Obtain audio file
+            audio_file = folder_path / f"{self.audio_stem}{extension}"
 
-            if candidate.exists():
-                return candidate
+            # Check: if audio file exists
+            if audio_file.exists():
+                return audio_file
 
         # Return the expected MP3 path if no supported
         # audio file is currently found.
@@ -83,39 +73,24 @@ class Stop:
     @property
     def broadcast_name(self) -> str:
         """
-        Human-readable Auracast broadcast name.
-
-        Examples:
-        Stop 1 -> AURA86-S1
-        Stop 2 -> AURA86-S2
+        Transmitter's UI-friendly broadcasted name.
         """
 
-        return f"AURA86-S{self.index}"
+        name = f"AURA86-S{self.index}"
+        return name
 
+    # Standard Auracast broadcast ID
+    # 3 bytes
     @property
-    def broadcast_id(self) -> str:
+    def broadcast_id(self) -> str: 
         """
-        Generate a unique Broadcast ID for each stop.
-
-        Route 86 = 0x56
-
-        Stop 1 -> 560001
-        Stop 2 -> 560002
-        Stop 3 -> 560003
-        Stop 4 -> 560004
+        Auracast standard broadcast ID.
+        3 bytes long.
         """
 
-        return (
-            f"{ROUTE_ID:02X}"
-            f"00"
-            f"{self.index:02X}"
-        )
+        return f"{ROUTE_ID:02X}00{self.index:02X}"
 
-
-# ============================================================
-# ROUTE 86 STOPS
-# ============================================================
-
+# Dedicated/hard-coded stops dictionary for the proof-of-concept
 STOPS = {
     1: Stop(
         index=1,
@@ -123,21 +98,18 @@ STOPS = {
         folder="Stop 1",
         audio_stem="audio1"
     ),
-
     2: Stop(
         index=2,
         name="Stop 2",
         folder="Stop 2",
         audio_stem="audio2"
     ),
-
     3: Stop(
         index=3,
         name="Stop 3",
         folder="Stop 3",
         audio_stem="audio3"
     ),
-
     4: Stop(
         index=4,
         name="Stop 4",
