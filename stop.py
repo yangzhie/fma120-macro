@@ -34,10 +34,7 @@ class Stop:
 
         # Return the expected MP3 path if no supported
         # audio file is currently found.
-        return (
-            folder_path
-            / f"{self.audio_stem}.mp3"
-        )
+        return (folder_path / f"{self.audio_stem}.mp3")
 
     @property
     def broadcast_name(self) -> str:
