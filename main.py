@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import serial
-from serial.tools import list_ports
 
 # Route number - distinguishes unique routes to avoid overlap
 # Application checks the route id, then stop index
@@ -57,109 +56,11 @@ STOPS = {
     )
 }
 
-# ============================================================
-# FMA120 SERIAL CONTROL
-# ============================================================
-
-class FMA120:
-    """Control one physical FMA120 through its serial / COM port."""
-
-    def __init__(self, port: str):
-        """Open the FMA120 serial control connection."""
-        self.ser = serial.Serial(
-            port,
-            921600,
-            bytesize=8,
-            parity="N",
-            stopbits=1,
-            timeout=2,
-            write_timeout=2
-        )
-        self.ser.reset_input_buffer()
-        self.ser.reset_output_buffer()
-
-    def close(self):
-        """Close the serial connection."""
-        self.ser.close()
-
-    def command(self, body: str) -> list[str]:
-        """Send a BC command and return the FMA120 response lines."""
-        # Commands are sent as: BC:<command> followed by CRLF.
-        packet = f"BC:{body}\r\n".encode("ascii")
-        print(f"TX  BC:{body}")
-        self.ser.write(packet)
-        self.ser.flush()
-
-        responses = []
-        while True:
-            raw = self.ser.readline()
-            if not raw:
-                break
-
-            text = raw.decode("ascii", errors="replace").strip()
-            if text:
-                print(f"RX  {text}")
-                responses.append(text)
-
-        return responses
-
-    def require_ok(self, body: str):
-        """Send a command and require an OK response."""
-        responses = self.command(body)
-        if "OK" not in responses:
-            raise RuntimeError(
-                f"No OK for BC:{body}; got {responses}"
-            )
-
-    def provision(self, stop: Stop, company_id: int):
-        """
-        Configure this FMA120 as one Route 86 stop.
-
-        BN = Broadcast Name
-        BE = Broadcast Code
-        BI = Broadcast ID
-        BF = Route / stop metadata
-        """
-        # Generate the custom BF metadata for this stop.
-        bf = build_bf_hex(stop, company_id)
-
-        # 1. Set the human-readable Broadcast Name.
-        self.require_ok(f"BN={stop.broadcast_name}")
-
-        # 2. Set the shared Broadcast Code used by the PoC.
-        self.require_ok(f"BE={SHARED_BROADCAST_CODE}")
-
-        # 3. Set the unique Broadcast ID for this stop.
-        self.require_ok(f"BI={stop.broadcast_id}")
-
-        # 4. Set the custom BF metadata containing Route and Stop IDs.
-        self.require_ok(f"BF={bf}")
-
-        # Read values back to verify the configuration.
-        print("Verification:")
-        self.command("BN")
-        self.command("BI")
-        self.command("BF")
-
-
-# ============================================================
-# SERIAL PORT DISCOVERY
-# ============================================================
-
-def list_serial_ports():
-    """List serial / COM ports so the FMA120 port can be identified."""
-    for port in list_ports.comports():
-        print(port.device, port.description)
-
-# ============================================================
-# COMMAND-LINE INTERFACE
-# ============================================================
-
 def main():
     """
-    Command-line entry point for the complete Auracast PoC.
+    Driver function, CLI entry point.
 
-    Available commands:
+    Commands:
         list-ports
         list-audio
         show-spec
@@ -168,158 +69,51 @@ def main():
         run-stop
     """
 
-    parser = argparse.ArgumentParser(
-        description=(
-            "Route 86 Auracast FMA120 "
-            "proof-of-concept controller"
-        )
-    )
+    # Parser-architecture
+    parser = argparse.ArgumentParser(description="Route 86 Auracast FMA120 proof-of-concept controller")
+    # Register each command
+    subparsers = parser.add_subparsers(dest="cmd", required=True)
 
-    subparsers = parser.add_subparsers(
-        dest="cmd",
-        required=True
-    )
+    # Find which port the FMA120 is on
+    subparsers.add_parser("list-ports", help="List available serial ports")
 
-    # --------------------------------------------------------
-    # list-ports
-    # --------------------------------------------------------
-    subparsers.add_parser(
-        "list-ports",
-        help="List available serial / COM ports"
-    )
+    # Find the FMA120's audio device name
+    subparsers.add_parser("list-audio", help="List available audio output devices")
 
-    # --------------------------------------------------------
-    # list-audio
-    # --------------------------------------------------------
-    subparsers.add_parser(
-        "list-audio",
-        help="List available audio output devices"
-    )
+    # Print all stops' config and BF hex
+    show_spec = subparsers.add_parser("show-spec", help="Show metadata for all Route 86 stops")
+    show_spec.add_argument("--company-id", required=True, help="Bluetooth Company ID in hexadecimal")
 
-    # --------------------------------------------------------
-    # show-spec
-    # --------------------------------------------------------
-    show_spec = subparsers.add_parser(
-        "show-spec",
-        help="Show metadata for all Route 86 stops"
-    )
+    # Write config to FMA120
+    provision = subparsers.add_parser("provision", help="Configure an FMA120 for a selected stop")
+    provision.add_argument("--port", required=True, help="Serial / COM port of the FMA120")
+    provision.add_argument("--stop", type=int, choices=range(1, 5), required=True, help="Stop number from 1 to 4")
+    provision.add_argument("--company-id", required=True, help="Bluetooth Company ID in hexadecimal")
 
-    show_spec.add_argument(
-        "--company-id",
-        required=True,
-        help="Bluetooth Company ID in hexadecimal"
-    )
+    # Loop a stop's audio
+    play = subparsers.add_parser("play", help="Play the audio announcement for a selected stop")
+    play.add_argument("--stop", type=int, choices=range(1, 5), required=True, help="Stop number from 1 to 4")
+    play.add_argument("--audio-device", help="Audio output device, normally the FMA120 USB audio output")
+    play.add_argument("--once", action="store_true", help="Play the announcement once instead of looping")
 
-    # --------------------------------------------------------
-    # provision
-    # --------------------------------------------------------
-    provision = subparsers.add_parser(
-        "provision",
-        help="Configure an FMA120 for a selected stop"
-    )
+    # Provision, then play
+    run_stop = subparsers.add_parser("run-stop", help="Provision the FMA120 and play the selected stop audio")
+    run_stop.add_argument("--port", required=True, help="Serial / COM port of the FMA120")
+    run_stop.add_argument("--stop", type=int, choices=range(1, 5), required=True, help="Stop number from 1 to 4")
+    run_stop.add_argument("--company-id", required=True, help="Bluetooth Company ID in hexadecimal")
+    run_stop.add_argument("--audio-device", help="Audio output device, normally the FMA120 USB audio output")
 
-    provision.add_argument(
-        "--port",
-        required=True,
-        help="Serial / COM port of the FMA120"
-    )
-
-    provision.add_argument(
-        "--stop",
-        type=int,
-        choices=range(1, 5),
-        required=True,
-        help="Stop number from 1 to 4"
-    )
-
-    provision.add_argument(
-        "--company-id",
-        required=True,
-        help="Bluetooth Company ID in hexadecimal"
-    )
-
-    # --------------------------------------------------------
-    # play
-    # --------------------------------------------------------
-    play = subparsers.add_parser(
-        "play",
-        help="Play the audio announcement for a selected stop"
-    )
-
-    play.add_argument(
-        "--stop",
-        type=int,
-        choices=range(1, 5),
-        required=True,
-        help="Stop number from 1 to 4"
-    )
-
-    play.add_argument(
-        "--audio-device",
-        help="Audio output device, normally the FMA120 USB audio output"
-    )
-
-    play.add_argument(
-        "--once",
-        action="store_true",
-        help="Play the announcement once instead of looping"
-    )
-
-    # --------------------------------------------------------
-    # run-stop
-    # --------------------------------------------------------
-    run_stop = subparsers.add_parser(
-        "run-stop",
-        help="Provision the FMA120 and play the selected stop audio"
-    )
-
-    run_stop.add_argument(
-        "--port",
-        required=True,
-        help="Serial / COM port of the FMA120"
-    )
-
-    run_stop.add_argument(
-        "--stop",
-        type=int,
-        choices=range(1, 5),
-        required=True,
-        help="Stop number from 1 to 4"
-    )
-
-    run_stop.add_argument(
-        "--company-id",
-        required=True,
-        help="Bluetooth Company ID in hexadecimal"
-    )
-
-    run_stop.add_argument(
-        "--audio-device",
-        help="Audio output device, normally the FMA120 USB audio output"
-    )
-
+    # Dispatching: each branch pulls what it needs out of args and calls the relevant function
     args = parser.parse_args()
-
-    # ========================================================
-    # COMMAND EXECUTION
-    # ========================================================
-
     if args.cmd == "list-ports":
         list_serial_ports()
-
     elif args.cmd == "list-audio":
         list_audio_devices()
-
     elif args.cmd == "show-spec":
-        company_id = parse_company_id(
-            args.company_id
-        )
+        company_id = parse_company_id(args.company_id)
 
         for stop in STOPS.values():
-            bf = build_bf_hex(
-                stop,
-                company_id
-            )
+            bf = build_bf_hex(stop, company_id)
 
             print("\n==========================")
             print(f"Stop: {stop.index}")
@@ -330,61 +124,31 @@ def main():
             print(f"BF: {bf}")
             print(f"Decoded BF: {decode_bf_hex(bf)}")
             print(f"Audio File: {stop.audio_path}")
-
     elif args.cmd == "provision":
         stop = STOPS[args.stop]
-
-        company_id = parse_company_id(
-            args.company_id
-        )
-
-        device = FMA120(
-            args.port
-        )
-
+        company_id = parse_company_id(args.company_id)
+        device = FMA120(args.port)
         try:
-            device.provision(
-                stop,
-                company_id
-            )
+            device.provision(stop, company_id)
         finally:
             device.close()
-
     elif args.cmd == "play":
-        play_audio(
-            STOPS[args.stop],
-            args.audio_device,
-            args.once
-        )
-
+        play_audio(STOPS[args.stop], args.audio_device, args.once)
     elif args.cmd == "run-stop":
         stop = STOPS[args.stop]
-
-        company_id = parse_company_id(
-            args.company_id
-        )
-
-        device = FMA120(
-            args.port
-        )
+        company_id = parse_company_id(args.company_id)
+        device = FMA120(args.port)
 
         try:
-            device.provision(
-                stop,
-                company_id
-            )
+            device.provision(stop, company_id)
         finally:
             device.close()
 
-        play_audio(
-            stop,
-            args.audio_device
-        )
-
-
-# ============================================================
-# PROGRAM ENTRY POINT
-# ============================================================
+        play_audio(stop, args.audio_device)
 
 if __name__ == "__main__":
+    """
+    Main dunder
+    """
+
     main()

@@ -1,3 +1,5 @@
+from serial.tools import list_ports
+
 def parse_company_id(value: str) -> int:
     """
     Convert CLI args from strings -> hex.
@@ -20,3 +22,11 @@ def parse_company_id(value: str) -> int:
         )
 
     return company_id
+
+def list_serial_ports():
+    """
+    List serial ports so the FMA120 port can be identified
+    """
+
+    for port in list_ports.comports():
+        print(port.device, port.description)
