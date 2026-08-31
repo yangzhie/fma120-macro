@@ -2,10 +2,10 @@
 from __future__ import annotations
 import argparse
 
-from utils.audio import *
 from classes.dongle import *
-from utils.formatting import *
 from classes.stop import *
+from utils.audio import *
+from utils.formatting import *
 from utils.utils import *
 
 # Route number - distinguishes unique routes to avoid overlap
