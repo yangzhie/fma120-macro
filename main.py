@@ -26,69 +26,8 @@ MAGIC = b"AU"
 PROTOCOL_VERSION = 1
 
 # TODO: Unused features
-# DIRECTION_OUTBOUND = 0
-# LANGUAGE_ENGLISH = 1
-
-# Each stop has a record + audio file
-# Immutable stop class
-@dataclass(frozen=True)
-class Stop:
-    """
-    Each stop's model and the transmitter config it maps to.
-    Immutable - identity of stop must not be changed.
-    """
-
-    index: int
-    name: str
-    folder: str
-    audio_stem: str
-    # direction: int = DIRECTION_OUTBOUND
-    # language: int = LANGUAGE_ENGLISH
-
-    @property
-    def audio_path(self) -> Path:
-        """
-        Path to the stop's announcement audio file.
-        Supported formats: mp3 and mp4.
-        """
-
-        folder_path = Path(r"./AudioAuracast") / self.folder
-
-        # Loop through the audio folder to obtain audio file
-        for extension in (".mp3", ".mp4"):
-            # Obtain audio file
-            audio_file = folder_path / f"{self.audio_stem}{extension}"
-
-            # Check: if audio file exists
-            if audio_file.exists():
-                return audio_file
-
-        # Return the expected MP3 path if no supported
-        # audio file is currently found.
-        return (
-            folder_path
-            / f"{self.audio_stem}.mp3"
-        )
-
-    @property
-    def broadcast_name(self) -> str:
-        """
-        Transmitter's UI-friendly broadcasted name.
-        """
-
-        name = f"AURA86-S{self.index}"
-        return name
-
-    # Standard Auracast broadcast ID
-    # 3 bytes
-    @property
-    def broadcast_id(self) -> str: 
-        """
-        Auracast standard broadcast ID.
-        3 bytes long.
-        """
-
-        return f"{ROUTE_ID:02X}00{self.index:02X}"
+DIRECTION_OUTBOUND = 0
+LANGUAGE_ENGLISH = 1
 
 # Dedicated/hard-coded stops dictionary for the proof-of-concept
 STOPS = {
@@ -118,60 +57,14 @@ STOPS = {
     )
 }
 
-
-# ============================================================
-# COMPANY ID
-# ============================================================
-
-def parse_company_id(value: str) -> int:
-    """
-    Parse a hexadecimal Bluetooth Company ID.
-
-    Examples:
-        "1234"
-        "0x1234"
-    """
-
-    value = (
-        value
-        .lower()
-        .replace("0x", "")
-    )
-
-    company_id = int(
-        value,
-        16
-    )
-
-    # Company ID must fit inside 16 bits.
-    if not 0 <= company_id <= 0xFFFF:
-        raise ValueError(
-            "Company ID must fit in 16 bits"
-        )
-
-    return company_id
-
-
-# ============================================================
-# PROJECT METADATA
-# ============================================================
-
-def build_project_payload(
+def build_payload(
     stop: Stop
 ) -> bytes:
     """
-    Build the custom Route 86 metadata.
+    Builds the custom 9 bytes.
 
     Layout:
-
-    AU
-    |
-    +-- Protocol Version
-    +-- Route ID
-    +-- Stop ID
-    +-- Direction
-    +-- Language
-    +-- Audio ID
+    AU(MAGIC)-PROTOCOL_VERSION-ROUTE_ID-INDEX-DIRECTION-LANGUAGE-AUDIO_ID
     """
 
     return (
@@ -498,157 +391,6 @@ def list_serial_ports():
     """List serial / COM ports so the FMA120 port can be identified."""
     for port in list_ports.comports():
         print(port.device, port.description)
-
-
-# ============================================================
-# AUDIO DEVICE DISCOVERY
-# ============================================================
-
-def list_audio_devices():
-    """
-    Display the available audio output devices.
-
-    The main purpose is to identify the FMA120
-    USB audio output so Python can send the
-    correct stop announcement to the transmitter.
-    """
-
-    import pygame
-
-    from pygame._sdl2 import (
-        audio as sdl2_audio
-    )
-
-    # Initialise pygame so audio devices can be queried.
-    pygame.init()
-
-    # False means output / playback devices.
-    devices = (
-        sdl2_audio
-        .get_audio_device_names(
-            False
-        )
-    )
-
-    for index, name in enumerate(
-        devices
-    ):
-
-        print(
-            f"[{index}] {name}"
-        )
-
-
-# ============================================================
-# AUDIO PLAYBACK
-# ============================================================
-
-def play_audio(
-    stop: Stop,
-    audio_device: str | None,
-    once: bool = False
-):
-    """
-    Play the audio file associated with a stop.
-
-    The selected audio output should normally be
-    the FMA120 USB audio device.
-
-    Signal flow:
-
-        audio file
-            |
-            v
-        Python / pygame
-            |
-            v
-        FMA120 USB Audio
-            |
-            v
-        FMA120
-            |
-            v
-        Auracast broadcast
-
-    If once=False, the announcement loops.
-    If once=True, it plays one time only.
-    """
-
-    import pygame
-
-    # Automatically resolve the audio file for
-    # the selected stop.
-    audio_file = (
-        stop.audio_path
-    )
-
-    # Stop immediately if the audio file does
-    # not exist.
-    if not audio_file.exists():
-
-        raise FileNotFoundError(
-            audio_file
-        )
-
-    # Reset any existing mixer session before
-    # selecting a new output device.
-    pygame.mixer.quit()
-
-    # Initialise the audio output.
-    pygame.mixer.init(
-        frequency=48000,
-        size=-16,
-        channels=2,
-        buffer=1024,
-        devicename=audio_device
-    )
-
-    # Load the stop announcement.
-    pygame.mixer.music.load(
-        str(audio_file)
-    )
-
-    # Play once or loop continuously.
-    pygame.mixer.music.play(
-        0 if once else -1
-    )
-
-    print(
-        f"Playing {audio_file} "
-        f"-> "
-        f"{audio_device or 'default output'}"
-    )
-
-    print(
-        "Press Ctrl+C to stop"
-    )
-
-    try:
-
-        # Keep the Python process alive while
-        # the audio is playing.
-        while (
-            pygame
-            .mixer
-            .music
-            .get_busy()
-        ):
-
-            time.sleep(
-                0.25
-            )
-
-    except KeyboardInterrupt:
-
-        # Ctrl+C allows the user to stop playback.
-        pass
-
-    finally:
-
-        # Always stop and release the mixer cleanly.
-        pygame.mixer.music.stop()
-        pygame.mixer.quit()
-
 
 # ============================================================
 # COMMAND-LINE INTERFACE
