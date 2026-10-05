@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from main import DIRECTION_OUTBOUND, LANGUAGE_ENGLISH, ROUTE_ID
+from config import DIRECTION_OUTBOUND, LANGUAGE_ENGLISH, ROUTE_ID
 
 @dataclass(frozen=True)
 class Stop:

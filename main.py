@@ -8,24 +8,9 @@ from utils.audio import *
 from utils.formatting import *
 from utils.utils import *
 
-# Route number - distinguishes unique routes to avoid overlap
-# Application checks the route id, then stop index
-ROUTE_ID = 86
-
-# Encryption key for all stops
-# Device will not be able to decrypt the audio without this
-SHARED_BROADCAST_CODE = "AURA86DEMO2026"
-
-# Front of every payload (2 bytes)
-# Makes the payload unique - parser checks this first
-MAGIC = b"AU"
-
-# Versioning of current protocol
-PROTOCOL_VERSION = 1
-
-# TODO: Unused features
-DIRECTION_OUTBOUND = 0
-LANGUAGE_ENGLISH = 1
+from config import (
+    SHARED_BROADCAST_CODE,
+)
 
 # Dedicated/hard-coded stops dictionary for the proof-of-concept
 STOPS = {
