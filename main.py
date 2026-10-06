@@ -9,7 +9,10 @@ from utils.formatting import *
 from utils.utils import *
 
 from config import (
+    ROUTE_ID,
     SHARED_BROADCAST_CODE,
+    MAGIC,
+    PROTOCOL_VERSION
 )
 
 # Dedicated/hard-coded stops dictionary for the proof-of-concept

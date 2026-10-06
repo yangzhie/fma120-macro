@@ -13,19 +13,9 @@ def build_payload(stop: Stop) -> bytes:
 
     return (
         MAGIC
-        + bytes([
-            PROTOCOL_VERSION
-        ])
-        + struct.pack(
-            "<H",
-            ROUTE_ID
-        )
-        + bytes([
-            stop.index,
-            stop.direction,
-            stop.language,
-            stop.index
-        ])
+        + bytes([PROTOCOL_VERSION])
+        + struct.pack("<H", ROUTE_ID)
+        + bytes([stop.index, stop.direction, stop.language])
     )
 
 def build_bf_hex(stop: Stop, company_id: int) -> str:
